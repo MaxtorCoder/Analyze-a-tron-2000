@@ -1,6 +1,5 @@
 import butil
 import ida_typeinf
-import idc
 import tcontainers
 import tutil
 
@@ -73,9 +72,11 @@ WowClientDB2_Base__AsyncSection = tutil.add_unpacked_type ('WowClientDB2_Base_As
                                                            void* sectionBufferPtr;
                                                            """)
 
-wdc3_db2_header = tutil.add_packed_type('wdc3_db2_header',
+wdc5_db2_header = tutil.add_packed_type('wdc5_db2_header',
                                         """
                                         uint32_t magic;
+                                        uint32_t versionNum;
+                                        char schemaString[128];
                                         uint32_t record_count;
                                         uint32_t field_count;
                                         uint32_t record_size;
@@ -105,7 +106,7 @@ field_storage_info = tutil.add_packed_type('field_storage_info',
                                            uint32_t bitpacking_size_bits;
                                            uint32_t flags;
                                            """)
-wdc3_section_header = tutil.add_packed_type('wdc3_section_header',
+wdc5_section_header = tutil.add_packed_type('wdc5_section_header',
                                             """
                                             __int64 tact_key_hash;
                                             uint32_t file_offset;
@@ -153,6 +154,8 @@ DBMeta = tutil.add_unpacked_type ('DBMeta',
                                    int record_size;
                                    int hotFixFieldCount;
                                    int id_column;
+                                   char field_1C;
+                                   char field_1D;
                                    char sparseTable;
                                    unsigned int* hotFixField_offsets;
                                    unsigned int* hotFixField_sizes;
@@ -176,7 +179,7 @@ DBMeta = tutil.add_unpacked_type ('DBMeta',
                                    void* sortFunc;
                                    void* sortFuncIndirect;
                                    bool field_A8;
-                                   bool field_A9;""".format(stridxt=DBMeta_stridx,intidxt=DBMeta_intidx))
+                                   bool field_A9;""".format(stridxt=DBMeta_stridx,intidxt=DBMeta_intidx), tutil.ADD_TYPE.REPLACE)
 
 WowClientDB2_Base = tutil.add_unpacked_type ('WowClientDB2_Base',
                                               """
@@ -269,8 +272,8 @@ WowClientDB2_Base = tutil.add_unpacked_type ('WowClientDB2_Base',
                                               _BYTE field_1D0;
                                               char unknown_size;
                                               """.format(meta=DBMeta,
-                                                         filehdr=wdc3_db2_header,
-                                                         filesecthdr=wdc3_section_header,
+                                                         filehdr=wdc5_db2_header,
+                                                         filesecthdr=wdc5_section_header,
                                                          fields=field_structure,
                                                          columnmeta=tutil.create_template_and_make_name (tcontainers.blz_vector(), [field_storage_info]),
                                                          vecunknown=tutil.create_template_and_make_name (tcontainers.blz_vector(), ['_UNKNOWN']),
@@ -280,7 +283,7 @@ WowClientDB2_Base = tutil.add_unpacked_type ('WowClientDB2_Base',
                                                          indexdatas=tutil.create_template_and_make_name (tcontainers.blz_vector(), [WowClientDB2_Base__IndexDataMap]),
                                                          idxbyints=tutil.create_template_and_make_name (tcontainers.blz_vector(), [WowClientDB2_Base__UniqueIdxByInt]),
                                                          idxbystrs=tutil.create_template_and_make_name (tcontainers.blz_vector(), [WowClientDB2_Base__UniqueIdxByString]),
-                                                         asyncsects=tutil.create_template_and_make_name (tcontainers.blz_vector(), [WowClientDB2_Base__AsyncSection])))
+                                                         asyncsects=tutil.create_template_and_make_name (tcontainers.blz_vector(), [WowClientDB2_Base__AsyncSection])), tutil.ADD_TYPE.REPLACE)
 
 def make_db2meta(ea):
   ti = ida_typeinf.tinfo_t()

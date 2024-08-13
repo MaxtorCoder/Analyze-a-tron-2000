@@ -3,7 +3,6 @@ import ida_funcs
 import ida_ida
 import ida_nalt
 import ida_name
-import ida_search
 import ida_segment
 import ida_typeinf
 import idc
@@ -11,8 +10,8 @@ import struct
 import sys
 
 def _find_sane (begin, end, pattern):
-  flags = ida_search.SEARCH_DOWN | ida_search.SEARCH_NEXT | ida_search.SEARCH_CASE
-  result = ida_search.find_binary(begin, end, pattern, 16, flags)
+  flags = ida_bytes.BIN_SEARCH_FORWARD | ida_bytes.BIN_SEARCH_BACKWARD | ida_bytes.BIN_SEARCH_CASE
+  result = ida_bytes.find_bytes(pattern, begin, range_end=end, flags=flags)
   return result if result != idc.BADADDR else None
 
 def find_segm_fixed (name):
@@ -28,13 +27,21 @@ def find_segm_fixed (name):
   return res
 
 class SearchRange:
-  absolutely_everything = [(ida_ida.cvar.inf.min_ea, ida_ida.cvar.inf.max_ea)]
+  absolutely_everything = [(ida_ida.idainfo.min_ea, ida_ida.idainfo.max_ea)]
   @classmethod
   def segment(cls, name):
     seg = find_segm_fixed(name)
     if len(seg) == 0:
       raise Exception('unknown segment {}'.format(name))
     return [(s.start_ea, s.end_ea) for s in seg]
+
+def find_pattern_2(pattern):
+  flags = ida_bytes.BIN_SEARCH_FORWARD | ida_bytes.BIN_SEARCH_BACKWARD | ida_bytes.BIN_SEARCH_CASE
+  result = ida_bytes.find_bytes(pattern, 0, flags=flags)
+  return result if result != idc.BADADDR else None
+
+def find_string_2(string):
+  return find_pattern_2(' '.join([hex(ord(c))[2:] for c in string]))
 
 def find_pattern(pattern, search_range = SearchRange.absolutely_everything):
   remaining_search_range = []

@@ -1,7 +1,7 @@
 import gutil
-import tcontainers
-import tdbc
 import tutil
+import ida_kernwin
+import idc
 
 def main():
   chosen_template = gutil.choose_one ('Template class', tutil.template_description.templates())
@@ -13,14 +13,14 @@ def main():
 
   parameters = []
   for parameter in range (0, template.parameter_count()):
-    ch_struct = ida_kernwin.choose_struc('Choose ' + name_pref + template.parameter_name (parameter))
+    ch_struct = ida_kernwin.choose_struct('Choose ' + name_pref + template.parameter_name (parameter))
     if not ch_struct:
       p = AskStr ("", template.parameter_name (parameter))
       if not p:
         return
       param = p
     else:
-      param = ida_struct.get_struc_name(ch_struct.id)
+      param = idc.get_struc_name(ch_struct.id)
     parameters.append (param)
     name_pref += '$' + param
 

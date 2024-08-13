@@ -1,11 +1,11 @@
 from idaapi import *
-import ida_struct
+import idc
 import putil
 
 ADD_TYPE = putil.enum(KEEP = False, ENSURE_UNIQUE = True, REPLACE = 2)
 
 def exists(name):
-  return ida_struct.get_struc_id (name) != BADADDR
+  return idc.get_struc_id (name) != BADADDR
 
 def _add_type (name, decl, attr, pre, post, mode):
   if exists(name):
@@ -20,7 +20,7 @@ def _add_type (name, decl, attr, pre, post, mode):
     decl = '{' + decl + '}'
   idc_parse_types ("{pre}\nstruct {attr} {name} {decl};\n{post}"
                    .format(pre=pre, name=name, attr=attr, decl=decl, post=post), 0)
-  import_type (cvar.idati, -1, name)
+  idc.import_type (-1, name)
   print ("## declared", name)
   return name
 

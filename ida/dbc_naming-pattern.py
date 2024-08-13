@@ -3,6 +3,8 @@ import cutil
 import tdbc
 import tutil
 import idc
+import idautils
+import sys
 
 # clientdb_base ctor: search any database name, xref to dbmeta, xref
 # to the function using that, is mostly just one, the static ctor for
@@ -84,49 +86,50 @@ except:
 #   return sub_7FF761F1FE10((__int64)&db_CreatureModelData, v1, 0, &v3); <-- you are looking for this function
 # }
 try:
-  RowReturnerLoc = butil.find_pattern ('48 89 5C 24 ? ' + # mov [rsp+?], rbx
-                                       '55 ' + # push rbp
-                                       '56 ' + # push rsi
-                                       '57 ' + # push rdi
-                                       '48 83 EC ? ' + # sub rsp, ?
-                                       '41 C6 01 01 ' + # mov byte ptr [r9], 1
-                                       '49 8B D9 ', # mov rbx, r9
-                                        # todo: this is probably way too long? retail works fine without rest
-                                        ## '80 B9 CD 01 00 00 00 ' +
-                                        ## '41 0F B6 E8 ' +
-                                        ## '8B F2 ' +
-                                        ## '48 8B F9 ' +
-                                        ## '75 ? ' +
-                                        ## 'C7 44 24 38 11 11 11 11',
+  RowReturnerLoc = butil.find_pattern ('48 89 5C 24 ? ' +   # mov [rsp+?], rbx
+                                       '48 89 74 24 ?'  +   # mov [rsp+?], rsi
+                                       '55 ' +              # push rbp
+                                       '57 ' +              # push rdi
+                                       '41 54' +            # push r12
+                                       '41 55' +            # push r13
+                                       '41 56' +            # push r14
+                                       '48 8B EC' +         # mov rbp, rsp
+                                       '48 83 EC ?' +       # sub rsp, 60
+                                       '41 C6 01 01' +      # mov byte ptr [r9], 1
                                        butil.SearchRange.segment('.text'))
 except:
   RowReturnerLoc = None
 
-# clientdb_base dtor: take any clientdb_base ctor, reference the db
-# object, the static ctor is usually first, the static dtor last. in
-# the static dtor, there should be one function the db object is
-# passed to. Alternatively go by the vtable that the ctor sets.
-clientdb_base_dtor_loc = butil.find_pattern ('48 89 5C 24 08 ' + # mov [rsp+08], rbx
-                                             '57 ' + # push rdi
-                                             '48 83 EC ? ' +  # sub rsp, ?
-                                             '33 FF ' + # xor edi, edi
-                                             '48 8D 05 ? ? ? ? ' + # lea rax, ?
-                                             '48 8b d9 ' + # mov rbx, rcx
-                                             '48 89 01 ' + # mov [rcx], rax
-                                             # todo: retail uses a different line here, 48 39 b9 90 01 00 00, so omit for now
-                                             '40 38 b9 cd 01 00 00',
-                                             butil.SearchRange.segment('.text'))
+# 10.1.5 has changed the pattern enough for me not to care about marking static dtors anymore.
+try:
+  # clientdb_base dtor: take any clientdb_base ctor, reference the db
+  # object, the static ctor is usually first, the static dtor last. in
+  # the static dtor, there should be one function the db object is
+  # passed to. Alternatively go by the vtable that the ctor sets.
+  clientdb_base_dtor_loc = butil.find_pattern ('48 89 5C 24 08 ' + # mov [rsp+08], rbx
+                                               '57 ' + # push rdi
+                                               '48 83 EC ? ' +  # sub rsp, ?
+                                               '33 FF ' + # xor edi, edi
+                                               '48 8D 05 ? ? ? ? ' + # lea rax, ?
+                                               '48 8b d9 ' + # mov rbx, rcx
+                                               '48 89 01 ' + # mov [rcx], rax
+                                               # todo: retail uses a different line here, 48 39 b9 90 01 00 00, so omit for now
+                                               '40 38 b9 ? 01 00 00', # cmp [rcx+?EDh], dil
+                                               butil.SearchRange.segment('.text'))
+except:
+  clientdb_base_dtor_loc = None
 
 butil.set_name(DB2ConstructorLocation, tdbc.WowClientDB2_Base + "::ctor")
 if GetInMemoryFieldOffsetFromMetaLoc:
   butil.set_name(GetInMemoryFieldOffsetFromMetaLoc, tdbc.WowClientDB2_Base + '::GetInMemoryFieldOffsetFromMeta')
 if RowReturnerLoc:
   butil.set_name(RowReturnerLoc, tdbc.WowClientDB2_Base + "::GetRowByID")
-butil.set_name (clientdb_base_dtor_loc, tdbc.WowClientDB2_Base + "::dtor")
+if clientdb_base_dtor_loc:
+  butil.set_name (clientdb_base_dtor_loc, tdbc.WowClientDB2_Base + "::dtor")
 
 dbobjects = {}
 
-for codeRef in CodeRefsTo(DB2ConstructorLocation, 0):
+for codeRef in idautils.CodeRefsTo(DB2ConstructorLocation, 0):
   match = cutil.matches_any(codeRef,
                             ( [ (-0x0E, ['lea',  'rdx', '.*'                       ]),
                                 (-0x07, ['lea',  'rcx', '.*'                       ]),
@@ -151,7 +154,7 @@ for codeRef in CodeRefsTo(DB2ConstructorLocation, 0):
   butil.force_variable (dbobject, tdbc.WowClientDB2_Base, 'db_{}'.format(name))
   dbobjects[dbobject] = name
 
-  for db2ObjectRef in XrefsTo(dbobject, 0):
+  for db2ObjectRef in idautils.XrefsTo(dbobject, 0):
     match = cutil.matches_any(db2ObjectRef.frm,
                               ( [ (+0x00, ['lea',  'rax', 'db_.*'  ]),
                                   (+0x07, ['retn'                  ]),
@@ -166,23 +169,24 @@ for codeRef in CodeRefsTo(DB2ConstructorLocation, 0):
                           '{db}* __fastcall a()'.format(db=tdbc.WowClientDB2_Base),
                           'GetDB{name}Pointer'.format(name=name))
 
-for codeRef in CodeRefsTo(clientdb_base_dtor_loc, 0):
-  match = cutil.matches_any(codeRef,
-                            ( [ (-0x0B, ['lea',  'rcx', 'db_.*'                   ]),
-                                (-0x04, ['add',  'rsp', '.*'                      ]),
-                                (+0x00, ['jmp',  tdbc.WowClientDB2_Base + '__dtor']),
-                              ],
-                              [ (0, 1, lambda val: idc.get_name(val)[len('db_'):]),
-                              ],
-                            ),
-                           )
+if clientdb_base_dtor_loc:
+  for codeRef in idautils.CodeRefsTo(clientdb_base_dtor_loc, 0):
+    match = cutil.matches_any(codeRef,
+                              ( [ (-0x0B, ['lea',  'rcx', 'db_.*'                   ]),
+                                  (-0x04, ['add',  'rsp', '.*'                      ]),
+                                  (+0x00, ['jmp',  tdbc.WowClientDB2_Base + '__dtor']),
+                                ],
+                                [ (0, 1, lambda val: idc.get_name(val)[len('db_'):]),
+                                ],
+                              ),
+                             )
 
-  if match is None:
-    continue
-  # todo: check that we're not naming a bigger static dtor, e.g. by function size
-  name = match[0]
+    if match is None:
+      continue
+    # todo: check that we're not naming a bigger static dtor, e.g. by function size
+    name = match[0]
 
-  butil.set_name (cutil.function_containing(codeRef), 'staticdtor_db_{}'.format(name))
+    butil.set_name (cutil.function_containing(codeRef), 'staticdtor_db_{}'.format(name))
 
 def has_build(needle, builds):
   for build in builds:
@@ -207,12 +211,12 @@ def init_column_names_and_make_rec_structs():
     likely_wowdefs_path = os.path.dirname(os.path.realpath(__file__)) + '/WoWDBDefs'
     sys.path += [likely_wowdefs_path + '/code/Python']
     import dbd
-  except Exception:
-    print ('WARNING: NOT getting column names: unable to find WoWDBDefs directory')
+  except Exception as ex:
+    print (f'WARNING: NOT getting column names: unable to find WoWDBDefs directory {ex}')
     return inline_column_names
 
   user_agent_prefix = 'Mozilla/5.0 (Windows; U; %s) WorldOfWarcraft/'
-  build = butil.get_cstring (butil.find_string (user_agent_prefix) + len(user_agent_prefix)).decode("utf-8")
+  build = butil.get_cstring(butil.find_string_2(user_agent_prefix) + len(user_agent_prefix)).decode("utf-8")
 
   print(F"Parsing DBD directory {likely_wowdefs_path + '/definitions'} with build {build}")
   dbds = dbd.parse_dbd_directory(likely_wowdefs_path + '/definitions')
